@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Polling Engine</title>
+    <style>
+       body {
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #0f172a 0%,
+                    #1e3a8a 50%,
+                    #2563eb 100%
+                );
+
+            margin: 0;
+            padding: 30px;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            background: rgba(255,255,255,0.12);
+
+            backdrop-filter: blur(15px);
+
+            border: 1px solid rgba(255,255,255,0.15);
+
+            color: white;
+
+            padding: 30px;
+
+            border-radius: 20px;
+
+            width: 100%;
+            max-width: 700px;
+
+            margin-bottom: 25px;
+
+            box-shadow:
+                0 8px 32px rgba(0,0,0,0.25);
+        }
+        .hero {
+            width: 100%;
+            max-width: 900px;
+            margin-bottom: 25px;
+        }
+
+            .logo-container {
+                display: flex;
+                align-items: center;
+                gap: 20px;
+                color: white;
+            }
+
+            .logo {
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+                font-size: 38px;
+
+                background: rgba(255,255,255,0.15);
+
+                backdrop-filter: blur(12px);
+
+                border: 1px solid rgba(255,255,255,0.25);
+            }
+
+            .logo-container h1 {
+                margin: 0;
+                font-size: 42px;
+                color: white;
+            }
+
+            .logo-container p {
+                margin: 5px 0 0 0;
+                color: rgba(255,255,255,0.85);
+            }
+
+        h2, h3 {
+            color: #1e3a8a;
+            margin-top: 0;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #4b5563;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .option-input {
+            margin-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        .poll-card {
+            background: rgba(255,255,255,0.10);
+
+            backdrop-filter: blur(10px);
+
+            border: 1px solid rgba(255,255,255,0.15);
+
+            color: white;
+
+            padding: 20px;
+
+            border-radius: 15px;
+
+            margin-bottom: 20px;
+        }
+        .vote-btn {
+            background-color: #10b981;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            font-size: 12px;
+            margin-left: 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .vote-btn:hover {
+            background-color: #059669;
+        }
+        .option-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+
+            margin-bottom: 12px;
+            padding: 12px;
+
+            background: rgba(255,255,255,0.95);
+
+            border-radius: 10px;
+
+            color: #111827;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+
+            background: rgba(255,255,255,0.2);
+
+            border-radius: 20px;
+
+            margin-top: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+
+            border-radius: 20px;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #10b981,
+                    #34d399
+                );
+        }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <div class="logo-container">
+            <div class="logo">📊</div>
+
+            <div>
+                <h1>PulseVote</h1>
+                <p>Real-Time Interactive Polling Platform</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Create a Live Poll</h2>
+        
+        <div class="form-group">
+            <label for="pollQuestion">Poll Question / Title</label>
+            <input type="text" id="pollQuestion" placeholder="e.g., Which language do you prefer?">
+        </div>
+
+        <div class="form-group">
+            <label>Options</label>
+            <input type="text" class="option-field option-input" placeholder="Option 1">
+            <input type="text" class="option-field option-input" placeholder="Option 2">
+            <input type="text" class="option-field option-input" placeholder="Option 3">
+        </div>
+
+        <button onclick="deployPoll()">Deploy Poll</button>
+    </div>
+
+    <div class="container" style="max-width: 600px; background: transparent; box-shadow: none; padding: 0;">
+        <h3>Active Live Polls</h3>
+        <div id="pollsContainer"></div>
+    </div>
+
+    <script>
+
+    let localPolls = [];
+
+    const socket = new WebSocket("ws://127.0.0.1:8080/ws");
+
+    socket.onopen = () => {
+        console.log("Connected to server");
+    };
+
+    socket.onclose = () => {
+        console.log("Disconnected from server");
+    };
+
+    socket.onerror = (error) => {
+        console.error("WebSocket Error:", error);
+    };
+
+    socket.onmessage = (event) => {
+
+        const msg = JSON.parse(event.data);
+
+        console.log("Received:", msg);
+
+        // NEW POLL RECEIVED
+        if (msg.type === "new_poll") {
+
+            const exists = localPolls.some(
+                poll => poll.id == msg.data.id
+            );
+
+            if (!exists) {
+                localPolls.unshift(msg.data);
+                renderPolls();
+            }
+        }
+
+        // VOTE UPDATE RECEIVED
+        if (msg.type === "vote_update") {
+
+            localPolls.forEach(poll => {
+
+                if (poll.id == msg.poll_id) {
+
+                    poll.options[msg.option] = msg.votes;
+
+                }
+
+            });
+
+            renderPolls();
+        }
+    };
+
+    async function loadPolls() {
+
+        try {
+
+            const response = await fetch("/polls");
+
+            if (!response.ok) {
+                console.error("Failed to load polls");
+                return;
+            }
+
+            const polls = await response.json();
+
+            localPolls = polls;
+
+            renderPolls();
+
+        } catch (error) {
+            console.error("Error loading polls:", error);
+        }
+    }
+
+    function deployPoll() {
+
+        const questionField =
+            document.getElementById("pollQuestion");
+
+        const question =
+            questionField.value.trim();
+
+        const optionFields =
+            document.querySelectorAll(".option-field");
+
+        let optionsObj = {};
+        let count = 0;
+
+        optionFields.forEach(field => {
+
+            if (field.value.trim() !== "") {
+
+                optionsObj[field.value.trim()] = 0;
+                count++;
+
+            }
+
+        });
+
+        if (!question || count < 2) {
+
+            alert(
+                "Please enter a question and at least 2 options."
+            );
+
+            return;
+        }
+
+        socket.send(
+            JSON.stringify({
+                action: "create_poll",
+                question: question,
+                options: Object.keys(optionsObj)
+            })
+        );
+
+        questionField.value = "";
+
+        optionFields.forEach(field => {
+            field.value = "";
+        });
+    }
+
+    function castVote(pollId, optionName) {
+
+        socket.send(
+            JSON.stringify({
+                action: "vote",
+                poll_id: pollId,
+                option: optionName
+            })
+        );
+    }
+
+    function renderPolls() {
+
+        const container =
+            document.getElementById("pollsContainer");
+
+        container.innerHTML = "";
+
+        localPolls.forEach(poll => {
+
+            let optionsHtml = "";
+
+            for (const option in poll.options) {
+
+                const totalVotes =
+    Object.values(poll.options)
+    .reduce((a,b) => a+b, 0);
+
+            const votes = poll.options[option];
+
+            const percentage =
+                totalVotes > 0
+                ? ((votes / totalVotes) * 100).toFixed(1)
+                : 0;
+
+            optionsHtml += `
+                <div class="option-row">
+
+                    <div style="width:100%">
+
+                        <div>
+                            ${option}
+                            (<b>${votes}</b> votes)
+                            - ${percentage}%
+                        </div>
+
+                        <div class="progress-bar">
+                            <div
+                                class="progress-fill"
+                                style="width:${percentage}%">
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <button
+                        class="vote-btn"
+                        onclick="castVote('${poll.id}','${option}')">
+                        Vote
+                    </button>
+
+                </div>
+            `;
+            }
+
+            const pollCard =
+                document.createElement("div");
+
+            pollCard.className = "poll-card";
+
+            pollCard.innerHTML = `
+                <h4>📌 ${poll.question}</h4>
+                <div class="options-list">
+                    ${optionsHtml}
+                </div>
+            `;
+
+            container.appendChild(pollCard);
+        });
+    }
+
+    window.onload = () => {
+        loadPolls();
+    };
+
+</script>
+</body>
+</html>
